@@ -4,6 +4,8 @@ import importlib.util
 import time
 from IPython.display import clear_output
 import random
+import math
+from collections import deque
 # This environment allows you to verify whether your program runs correctly during testing, 
 # as it follows the same observation format from `env.reset()` and `env.step()`. 
 # However, keep in mind that this is just a simplified environment. 
@@ -14,33 +16,78 @@ import random
 
 
 class SimpleTaxiEnv():
+    
     def __init__(self, grid_size=5, fuel_limit=50):
         """
         Custom Taxi environment supporting different grid sizes.
         """
-        self.grid_size = grid_size
+        self.grid_size = random.randint(5, 10)
         self.fuel_limit = fuel_limit
         self.current_fuel = fuel_limit
         self.passenger_picked_up = False
         
         self.stations = [(0, 0), (0, self.grid_size - 1), (self.grid_size - 1, 0), (self.grid_size - 1, self.grid_size - 1)]
         self.passenger_loc = None
+
        
         self.obstacles = set()  # No obstacles in simple version
         self.destination = None
+    
+    def _generate_stations_and_obstacles_and_taxi_pos(self, obstacle_ratio):
+        def is_connected(start, targets):
+            visited = set()
+            queue = deque([start])
 
-    def reset(self):
+            while queue:
+                current = queue.popleft()
+                visited.add(current)
+                x, y = current
+
+                for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
+                    nx, ny = x + dx, y + dy
+                    next_pos = (nx, ny)
+                    if (
+                        0 <= nx < self.grid_size and 0 <= ny < self.grid_size and
+                        next_pos not in self.obstacles and
+                        next_pos not in visited
+                    ):
+                        queue.append(next_pos)
+
+            return all(t in visited for t in targets)
+
+        self.stations = []
+        while len(self.stations) < 4:
+            pos = (random.randint(0, self.grid_size - 1), random.randint(0, self.grid_size - 1))
+            if pos not in self.stations:
+                self.stations.append(pos)
+
+        total_cells = self.grid_size * self.grid_size
+        num_obstacles = math.ceil(total_cells * obstacle_ratio)
+
+        while True:
+            self.obstacles = set()
+            while len(self.obstacles) < num_obstacles:
+                pos = (random.randint(0, self.grid_size - 1), random.randint(0, self.grid_size - 1))
+                if pos not in self.stations:
+                    self.obstacles.add(pos)
+
+            available_positions = [
+                (x, y) for x in range(self.grid_size) for y in range(self.grid_size)
+                if (x, y) not in self.stations and (x, y) not in self.obstacles
+            ]
+
+            self.taxi_pos = random.choice(available_positions)
+            
+            if is_connected(self.taxi_pos, self.stations):
+                break 
+
+    def reset(self, obstacle_ratio=0.2):
         """Reset the environment, ensuring Taxi, passenger, and destination are not overlapping obstacles"""
         self.current_fuel = self.fuel_limit
         self.passenger_picked_up = False
+        self.grid_size = random.randint(5, 10)
+        self._generate_stations_and_obstacles_and_taxi_pos(obstacle_ratio)
         
-
-        available_positions = [
-            (x, y) for x in range(self.grid_size) for y in range(self.grid_size)
-            if (x, y) not in self.stations and (x, y) not in self.obstacles
-        ]
-
-        self.taxi_pos = random.choice(available_positions)
         
         self.passenger_loc = random.choice([pos for pos in self.stations])
         
@@ -129,41 +176,121 @@ class SimpleTaxiEnv():
         
         state = (taxi_row, taxi_col, self.stations[0][0],self.stations[0][1] ,self.stations[1][0],self.stations[1][1],self.stations[2][0],self.stations[2][1],self.stations[3][0],self.stations[3][1],obstacle_north, obstacle_south, obstacle_east, obstacle_west, passenger_look, destination_look)
         return state
-    def render_env(self, taxi_pos,   action=None, step=None, fuel=None):
+
+    def get_state_by_obs(self, obs, target_pos, passenger_pos_view_by_taxi, destination_pos_view_by_taxi):
+        '''
+        obs = (
+                [0] taxi_row, 
+                [1] taxi_col, 
+                [2] self.stations[0][0],
+                [3] self.stations[0][1] ,
+                [4] self.stations[1][0],
+                [5] self.stations[1][1],
+                [6] self.stations[2][0],
+                [7] self.stations[2][1],
+                [8] self.stations[3][0],
+                [9] self.stations[3][1],
+                [10] obstacle_north, 
+                [11] obstacle_south, 
+                [12] obstacle_east, 
+                [13] obstacle_west, 
+                [14] passenger_look, 
+                [15] destination_look)
+        '''
+        state = (
+            # (obs[0],obs[1]), # taxi pos
+            obs[10], # obstacle
+            obs[11],
+            obs[12],
+            obs[13],
+            (target_pos[0]-obs[0],target_pos[1]-obs[1]), #target relative pos
+            target_pos == passenger_pos_view_by_taxi, # if current target is passenger pos
+            target_pos == destination_pos_view_by_taxi # if current target is destination pos
+        )
+        return state
+    
+    def draw_env_txt(self, taxi_pos,   action=None, step=None, fuel=None, episode=0, 
+                     potential=0, reward=0, shaped_reward_detail=[], log_path="env_log.txt"):
         clear_output(wait=True)
 
         grid = [['.'] * self.grid_size for _ in range(self.grid_size)]
         
-        '''
+        
+        with open(log_path, "a", encoding="utf-8") as f:
+            grid = [['.'] * self.grid_size for _ in range(self.grid_size)]
+            # Place obstacles
+            for oy, ox in self.obstacles:
+                grid[oy][ox] = 'x'
+
+            for sy, sx in self.stations:
+                if (sy, sx) != self.passenger_loc and (sy, sx) != self.destination:
+                    grid[sy][sx] = 'S'
+
+            # Place passenger
+            py, px = self.passenger_loc
+            if not self.passenger_picked_up:
+                grid[py][px] = 'P'
+            
+            # Place destination
+            dy, dx = self.destination
+            grid[dy][dx] = '🔴'
+        
+            # Place taxi
+            ty, tx = taxi_pos
+            if 0 <= tx < self.grid_size and 0 <= ty < self.grid_size:
+                grid[ty][tx] = '🚖'
+
+            f.write(f"\nEpisode: {episode}\n")
+            f.write(f"Step: {step}\n")
+            f.write(f"Taxi Position after last action: ({ty}, {tx})\n")
+            f.write(f"Passenger picked?: {self.passenger_picked_up}\n")
+            f.write(f"Dest Position: ({self.destination})\n")
+            f.write(f"Fuel Left: {fuel}\n")
+            f.write(f"Last Action: {self.get_action_name(action)}\n")
+            f.write(f"Reward: {reward}\n")
+            f.write(f"potential: {potential}\n")
+            f.write(f"-----------------Shaped reward detail:---------------\n")
+            for detail in shaped_reward_detail:
+                f.write(f"{detail}\n")
+
+
+            # 寫入地圖
+            for row in grid:
+                f.write(" ".join(row) + "\n")
+            f.write("\n")
+
+    def render_env(self, taxi_pos,   action=None, step=None, fuel=None):
+        clear_output(wait=True)
+
+        grid = [['.'] * self.grid_size for _ in range(self.grid_size)]
+        # Place obstacles
+        for oy, ox in self.obstacles:
+            grid[oy][ox] = 'x'
+        
+        for sy, sx in self.stations:
+            if (sy, sx) != self.passenger_loc and (sy, sx) != self.destination:
+                grid[sy][sx] = 'S'
+
         # Place passenger
-        py, px = passenger_pos
-        if 0 <= px < self.grid_size and 0 <= py < self.grid_size:
+        py, px = self.passenger_loc
+        if not self.passenger_picked_up:
             grid[py][px] = 'P'
-        '''
         
-        
-        grid[0][0]='R'
-        grid[0][4]='G'
-        grid[4][0]='Y'
-        grid[4][4]='B'
-        '''
         # Place destination
-        dy, dx = destination_pos
-        if 0 <= dx < self.grid_size and 0 <= dy < self.grid_size:
-            grid[dy][dx] = 'D'
-        '''
+        dy, dx = self.destination
+        grid[dy][dx] = '🔴'
+    
         # Place taxi
         ty, tx = taxi_pos
         if 0 <= tx < self.grid_size and 0 <= ty < self.grid_size:
             grid[ty][tx] = '🚖'
 
-        # Print step info
-        print(f"\nStep: {step}")
-        print(f"Taxi Position: ({tx}, {ty})")
-        #print(f"Passenger Position: ({px}, {py}) {'(In Taxi)' if (px, py) == (tx, ty) else ''}")
-        #print(f"Destination: ({dx}, {dy})")
-        print(f"Fuel Left: {fuel}")
+        print(f"Step: {step}\n")
+        print(f"Taxi Position: ({tx}, {ty})\n")
+        print(f"Passenger picked?: {self.passenger_picked_up}\n")
+        print(f"Fuel Left: {fuel}\n")
         print(f"Last Action: {self.get_action_name(action)}\n")
+
 
         # Print grid
         for row in grid:
