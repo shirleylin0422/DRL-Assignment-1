@@ -209,7 +209,6 @@ def tabular_q_learning_taxi(episodes=10000, alpha=0.3, gamma=0.8,
                     target_station = passenger_pos_view_by_taxi
                     # print(f"target_station updated 11") 
                     # print(f"target_station {target_station}")
-
                     if destination_pos_view_by_taxi is None:
                         sorted_stations = sort_stations_by_distance((next_taxi_pos[0],next_taxi_pos[1]), stations)
                         for station in sorted_stations:
