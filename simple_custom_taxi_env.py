@@ -215,7 +215,6 @@ class SimpleTaxiEnv():
 
         grid = [['.'] * self.grid_size for _ in range(self.grid_size)]
         
-        
         with open(log_path, "a", encoding="utf-8") as f:
             grid = [['.'] * self.grid_size for _ in range(self.grid_size)]
             # Place obstacles
