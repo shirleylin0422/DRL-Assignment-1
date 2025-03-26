@@ -358,7 +358,6 @@ def tabular_q_learning_taxi(episodes=10000, alpha=0.3, gamma=0.8,
     return q_table, rewards_per_episode
 
 q_table, rewards = tabular_q_learning_taxi(episodes=10000, debug=True, 
-                                           alpha=0.1, gamma=0.95, decay_rate=0.9995, fuel_limit=100)
+                                           alpha=0.1, gamma=0.99, decay_rate=0.9995, fuel_limit=100)
 with open("q_table.pkl", "wb") as f:
         pickle.dump(dict(q_table), f)
-        
