@@ -199,7 +199,6 @@ def tabular_q_learning_taxi(episodes=10000, alpha=0.3, gamma=0.8,
                     # print(f"target_station updated 12")
                     next_target_station = passenger_pos_view_by_taxi
                     shaped_reward_detail.append(f"next_target_station_2 {next_target_station}")
-
         
             elif not cur_passenger_picked_up and  passenger_pos_view_by_taxi is not None: 
                 if next_passenger_picked_up: # pick up passenger successfully
@@ -208,7 +207,7 @@ def tabular_q_learning_taxi(episodes=10000, alpha=0.3, gamma=0.8,
                     # potential_shaping_value = potential_shaping(cur_taxi_pos, next_taxi_pos, cur_taxi_pos)
                     shaped_reward_detail.append(f"pickup successfully,  time:{pickup_time}, reward:{shaped_reward}")
                     target_station = passenger_pos_view_by_taxi
-                    # print(f"target_station updated 11")
+                    # print(f"target_station updated 11") 
                     # print(f"target_station {target_station}")
 
                     if destination_pos_view_by_taxi is None:
