@@ -200,7 +200,7 @@ def tabular_q_learning_taxi(episodes=10000, alpha=0.3, gamma=0.8,
                     next_target_station = passenger_pos_view_by_taxi
                     shaped_reward_detail.append(f"next_target_station_2 {next_target_station}")
 
-            
+        
             elif not cur_passenger_picked_up and  passenger_pos_view_by_taxi is not None: 
                 if next_passenger_picked_up: # pick up passenger successfully
                     shaped_reward += 30 - pickup_time*3
